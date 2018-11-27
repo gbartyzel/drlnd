@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 
 class QNetworkDense(nn.Module):
-    def __init__(self, u_dim, o_dim):
+    def __init__(self, o_dim, u_dim):
         super(QNetworkDense, self).__init__()
 
         self.fc_1 = nn.Linear(o_dim, 256)

@@ -1,3 +1,4 @@
+import torch
 import numpy as np
 from collections import deque
 
@@ -8,11 +9,12 @@ class ReplayMemory(object):
     experience in fixed size buffer and sample transition of batch size for
     learning purpose.
     """
-    def __init__(self, capacity):
+    def __init__(self, capacity, batch_size):
         """
         :param capacity: int, set size of the buffer
         """
         self.capacity = capacity
+        self._batch_size = batch_size
 
         self._observation1_buffer = deque()
         self._action_buffer = deque()
@@ -35,19 +37,18 @@ class ReplayMemory(object):
         self._add_to_buffer(self._observation2_buffer, next_state)
         self._add_to_buffer(self._terminal_buffer, done)
 
-    def sample(self, batch_size):
+    def sample(self):
         """
         Sample minibatch from transition stored in replay buffer.
-        :param batch_size: integer, size of the minibatch
         :return: dict, minibatch
         """
-        idxs = np.random.randint((self.size - 1), size=batch_size)
+        idxs = np.random.randint((self.size - 1), size=self._batch_size)
         batch = dict()
-        batch['obs1'] = np.take(self._observation1_buffer, idxs, axis=0)
-        batch['u'] = np.take(self._action_buffer, idxs, axis=0)
-        batch['r'] = np.take(self._reward_buffer, idxs, axis=0)
-        batch['obs2'] = np.take(self._observation2_buffer, idxs, axis=0)
-        batch['d'] = np.take(self._terminal_buffer, idxs, axis=0)
+        batch['obs1'] = self._prepare_batch(self._observation1_buffer, idxs)
+        batch['u'] = self._prepare_batch(self._action_buffer, idxs)
+        batch['r'] = self._prepare_batch(self._reward_buffer, idxs)
+        batch['obs2'] = self._prepare_batch(self._observation2_buffer, idxs)
+        batch['d'] = self._prepare_batch(self._terminal_buffer, idxs)
 
         return batch
 
@@ -59,3 +60,8 @@ class ReplayMemory(object):
         if self.size >= self.capacity:
             buffer.popleft()
         buffer.append(value)
+
+    @staticmethod
+    def _prepare_batch(input_buffer, idxs):
+        input_buffer = np.vstack(np.take(input_buffer, idxs, axis=0))
+        return torch.from_numpy(input_buffer)
