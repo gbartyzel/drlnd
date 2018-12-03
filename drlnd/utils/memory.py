@@ -35,7 +35,7 @@ class ReplayMemory(object):
         self._add_to_buffer(self._action_buffer, action)
         self._add_to_buffer(self._reward_buffer, reward)
         self._add_to_buffer(self._observation2_buffer, next_state)
-        self._add_to_buffer(self._terminal_buffer, done)
+        self._add_to_buffer(self._terminal_buffer, float(done))
 
     def sample(self):
         """
