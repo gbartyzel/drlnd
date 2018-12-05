@@ -44,11 +44,11 @@ class ReplayMemory(object):
         """
         idxs = np.random.randint((self.size - 1), size=self._batch_size)
         batch = dict()
-        batch['obs1'] = self._prepare_batch(self._observation1_buffer, idxs)
-        batch['u'] = self._prepare_batch(self._action_buffer, idxs)
-        batch['r'] = self._prepare_batch(self._reward_buffer, idxs)
-        batch['obs2'] = self._prepare_batch(self._observation2_buffer, idxs)
-        batch['d'] = self._prepare_batch(self._terminal_buffer, idxs)
+        batch['obs1'] = self._prepare_batch(self._observation1_buffer, idxs).float()
+        batch['u'] = self._prepare_batch(self._action_buffer, idxs).long()
+        batch['r'] = self._prepare_batch(self._reward_buffer, idxs).float()
+        batch['obs2'] = self._prepare_batch(self._observation2_buffer, idxs).float()
+        batch['d'] = self._prepare_batch(self._terminal_buffer, idxs).float()
 
         return batch
 

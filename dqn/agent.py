@@ -10,9 +10,9 @@ from dqn.model import QNetworkDense
 
 
 class Agent(object):
-    def __init__(self, o_dim, u_dim, lrate, tau, gamma, eps_decay,
-                 update_freq, buffer_size, batch_size, double_q, dueling,
-                 model_path):
+    def __init__(self, o_dim, u_dim, lrate, tau, gamma, n_step_annealing,
+                 eps_min, update_freq, buffer_size, batch_size, double_q, 
+                 dueling, model_path):
 
         use_cuda = torch.cuda.is_available()
         self._device = torch.device("cuda" if use_cuda else "cpu")
@@ -21,11 +21,12 @@ class Agent(object):
         self._tau = tau
         self._gamma = gamma
         self._update_freq = update_freq
-        self._eps_decay = eps_decay
         self._batch_size = batch_size
         self._double_q = double_q
 
         self._eps = 1.0
+        self._eps_min = eps_min
+        self._eps_decay = (self._eps - self._eps_min) / n_step_annealing
         self._steps = 0
 
         self._checkpoint_path = os.path.join(model_path, "checkpoint.pth")
@@ -54,37 +55,38 @@ class Agent(object):
     def observe(self, state, action, reward, next_state, done):
         self._memory.add(state, action, reward, next_state, done)
 
-        self._eps *= self._eps_decay
+        self._eps -= self._eps_decay
+        self._eps = max(self._eps, self._eps_min)
         self._steps += 1
 
         if self._steps % self._update_freq == 0:
+            self._steps = 0
             if self._memory.size >= self._batch_size:
                 self._learn()
 
     def _learn(self):
         train_batch = self._memory.sample()
-        state_batch = train_batch['obs1'].float().to(self._device)
+        state_batch = train_batch['obs1'].to(self._device)
         action_batch = train_batch['u'].to(self._device)
-        reward_batch = train_batch['r'].float().to(self._device)
-        next_state_batch = train_batch['obs2'].float().to(self._device)
+        reward_batch = train_batch['r'].to(self._device)
+        next_state_batch = train_batch['obs2'].to(self._device)
         done_batch = train_batch['d'].float().to(self._device)
 
         with torch.no_grad():
             if self._double_q:
-                next_actions = torch.argmax(self._dqn_main(next_state_batch),
-                                            dim=1).view(-1, 1)
-                target_action_values = torch.gather(self._dqn_target(
+                next_actions = torch.argmax(
+                    self._dqn_main(next_state_batch), dim=1).view(-1, 1)
+                q_target_next = torch.gather(self._dqn_target(
                     next_state_batch), 1, next_actions)
             else:
-                target_action_values = torch.max(self._dqn_target(
+                q_target_next = torch.max(self._dqn_target(
                     next_state_batch), dim=1)[0].view(-1, 1)
 
-        action_values = torch.gather(
+        q_values = torch.gather(
             self._dqn_main(state_batch), 1, action_batch)
-        target = torch.squeeze(
-            reward_batch + (1.0 - done_batch) * self._gamma
-            * target_action_values)
-        loss = F.mse_loss(torch.squeeze(action_values), target)
+        q_target = (reward_batch + (1.0 - done_batch) * self._gamma
+                    * q_target_next)
+        loss = F.smooth_l1_loss(q_values.squeeze(), q_target.squeeze())
         self._optim.zero_grad()
         loss.backward()
         self._optim.step()
