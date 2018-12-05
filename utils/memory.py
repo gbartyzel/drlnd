@@ -11,7 +11,12 @@ class ReplayMemory(object):
     """
     def __init__(self, capacity, batch_size):
         """
-        :param capacity: int, set size of the buffer
+        Initialize replay memory
+        
+        Params
+        ======
+            capacity (int): set size of the buffer,
+            batch_size (int): set size of the minibatch
         """
         self.capacity = capacity
         self._batch_size = batch_size
@@ -25,11 +30,14 @@ class ReplayMemory(object):
     def add(self, state, action, reward, next_state, done):
         """
         Add transition to replay buffer
-        :param state: np.ndarray, observation in step t
-        :param action: np.ndarray, action in step t
-        :param reward: float, reward in step t
-        :param next_state: np.ndarray, observation in step t+1
-        :param done: boolean, signal if current state is terminal
+        
+        Params
+        ======
+            state (array_like): observation in step t,
+            action (array_like): action in step t,
+            reward (float): reward in step t,
+            next_state (array_like): observation in step t+1,
+            done (bool): terminal signal from environment,
         """
         self._add_to_buffer(self._observation1_buffer, state)
         self._add_to_buffer(self._action_buffer, action)
@@ -39,8 +47,7 @@ class ReplayMemory(object):
 
     def sample(self):
         """
-        Sample minibatch from transition stored in replay buffer.
-        :return: dict, minibatch
+        Return minibatch from transition stored in replay buffer.
         """
         idxs = np.random.randint((self.size - 1), size=self._batch_size)
         batch = dict()

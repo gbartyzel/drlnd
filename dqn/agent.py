@@ -13,7 +13,25 @@ class Agent(object):
     def __init__(self, o_dim, u_dim, lrate, tau, gamma, n_step_annealing,
                  eps_min, update_freq, buffer_size, batch_size, double_q, 
                  dueling, model_path):
-
+        """
+        Initialize DQN agent.
+        
+        Params
+        ======
+            o_dim (int): dimension of the observation space,
+            u_dim (int): dimension of the action space,
+            lrate (float): learning rate,
+            tau (float): parameter for soft update,
+            gamma (float): discount factor for reward,
+            n_step_annealing (int): define max steps for exploration
+            eps_min (float): minimum value of the epsilon,
+            update_freq (int): update frequency for the agent,
+            buffer_size (int): replay memory capacity,
+            batch_size (int): size of the minibatch,
+            double_q (bool): flag that enable double dqn,
+            dueling (bool): flag that enable dueling dqn,
+            model_path (string): path for saved model.
+        """
         use_cuda = torch.cuda.is_available()
         self._device = torch.device("cuda" if use_cuda else "cpu")
         self._u_dim = u_dim
@@ -41,6 +59,18 @@ class Agent(object):
         self._optim = optim.Adam(self._dqn_main.parameters(), lrate)
 
     def act(self, state, train=False):
+        """
+        Returns actions for given state from environment
+        
+        Params
+        ======
+            state (array_like): current state
+            train (bool): train flag for exploration
+        """
+        self._eps -= self._eps_decay
+        self._eps = max(self._eps, self._eps_min)
+        self._steps += 1
+
         state = torch.from_numpy(state).float().unsqueeze(0).to(self._device)
         self._dqn_main.eval()
         with torch.no_grad():
@@ -53,11 +83,18 @@ class Agent(object):
             return np.random.randint(self._u_dim)
 
     def observe(self, state, action, reward, next_state, done):
+        """
+        Perform learning procedure.
+        
+        Params:
+            state (array_like): current state,
+            action (int): performed action,
+            reward (float): reward received from environemnt,
+            next_state (array_like): next state,
+            done (bool): environment terminal flag.
+        """
         self._memory.add(state, action, reward, next_state, done)
 
-        self._eps -= self._eps_decay
-        self._eps = max(self._eps, self._eps_min)
-        self._steps += 1
 
         if self._steps % self._update_freq == 0:
             self._steps = 0
@@ -100,9 +137,15 @@ class Agent(object):
                 (1.0 - self._tau) * t_param.data + self._tau * param.data)
 
     def save_model(self):
+        """
+        Save model in path.
+        """
         torch.save(self._dqn_main.state_dict(), self._checkpoint_path)
 
     def load_model(self):
+        """
+        Load model if exists.
+        """
         if not os.path.isdir(os.path.split(self._checkpoint_path)[0]):
             os.makedirs(os.path.split(self._checkpoint_path)[0])
         if os.path.exists(self._checkpoint_path):
