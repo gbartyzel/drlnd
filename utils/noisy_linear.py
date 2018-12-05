@@ -4,43 +4,32 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-class NoisyLinear(nn.Module):
-    def __init__(self, input_features, output_features, bias=True):
-        super(NoisyLinear, self).__init__()
-        self.in_features = input_features
-        self.out_features = output_features
-
-        mu_val = 1 / np.sqrt(input_features)
-        sigma_val = 0.5 / np.sqrt(input_features)
-
-        self.w_mu = nn.Parameter(torch.Tensor(output_features, input_features))
-        self.w_sigma = nn.Parameter(
-            sigma_val * torch.ones(output_features, input_features))
-        self.w_mu.data.uniform_(-mu_val, mu_val)
-
-        self.b_mu = nn.Parameter(torch.Tensor(output_features))
-        self.b_sigma = nn.Parameter(sigma_val * torch.ones(output_features))
-        self.b_mu.data.uniform_(-mu_val, mu_val)
-
+class NoisyLinear(nn.Linear):
+    def __init__(self, in_features, out_features, bias=True):
+        super(NoisyLinear, self).__init__(in_features, out_features, bias)
+        mu_init = 1.0 / np.sqrt(self.in_features)
+        sigma_init = 0.5 / np.sqrt(self.in_features)
+        
+        self.weight.data.uniform_(-mu_init, mu_init)
+        self.weight_sigma = nn.Parameter(torch.Tensor(out_features, in_features).fill_(sigma_init))
+        if bias:
+            self.bias.data.uniform_(-mu_init, mu_init)
+            self.bias_sigma = nn.Parameter(torch.Tensor(out_features).fill_(sigma_init))
+        
+        self.register_buffer('weight_eps', torch.zeros(out_features, in_features, requires_grad=True))
+        self.register_buffer('bias_eps', torch.zeros(out_features, requires_grad=True))
+ 
     def forward(self, input):
-        w_eps, b_eps = self._create_noise()
-        weight = self.w_mu + self.w_sigma * w_eps
-        bias = self.b_mu + self.b_sigma * b_eps
-        return F.linear(input, weight, bias)
-
-    def extra_repr(self):
-        return 'in_features={}, out_features={}, bias={}'.format(
-            self.in_features, self.out_features, self.bias is not None
-        )
-
-    def _create_noise(self):
-        noise_i = torch.normal(mean=torch.zeros(1, self.in_features), std=1.0)
-        noise_j = torch.normal(mean=torch.zeros(self.out_features, 1), std=1.0)
-        w_eps = self._noising(noise_i) * self._noising(noise_j)
-        b_eps = torch.squeeze(self._noising(noise_j))
-        return w_eps, b_eps
-
-    @staticmethod
-    def _noising(x):
-        return torch.sign(x) * torch.sqrt(torch.abs(x))
-
+        self.sample_noise()
+        bias = self.bias
+        if bias is not None:
+            bias = self.bias + self.bias_sigma * self.bias_eps.t().cuda()
+        return F.linear(
+            input, self.weight + self.weight_sigma * self.weight_eps.cuda(), bias)
+    
+    def sample_noise(self):
+        noise_i = torch.randn(1, self.in_features)
+        noise_j = torch.randn(self.out_features, 1)
+        noising = lambda x: torch.mul(torch.sign(x), torch.sqrt(torch.abs(x)))
+        self.weight_eps = torch.mul(noising(noise_i), noising(noise_j))
+        self.bias_eps = noising(noise_j)
