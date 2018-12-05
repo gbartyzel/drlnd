@@ -1,5 +1,6 @@
-.ipynb_checkpoints/
-.idea/
+.ipynb_checkpoints/*
+.idea/*
 **.pyc
 env/*
 !env/.gitkeep
+unity-environment.log
