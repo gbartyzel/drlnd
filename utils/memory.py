@@ -66,6 +66,8 @@ class ReplayMemory(object):
     def _add_to_buffer(self, buffer, value):
         if self.size >= self.capacity:
             buffer.popleft()
+        if len(np.shape(value)) > 1:
+            value = np.expand_dims(value, axis=0)
         buffer.append(value)
 
     @staticmethod

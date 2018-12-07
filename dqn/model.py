@@ -34,12 +34,12 @@ class QNetworkConv(nn.Module):
         self.conv_1 = nn.Conv2d(channels, 8, kernel_size=4, stride=4)
         self.conv_2 = nn.Conv2d(8, 16, kernel_size=4, stride=4)
         self.conv_3 = nn.Conv2d(16, 32, kernel_size=4, stride=4)
-        self.size = 32 * 2 * 2
-        self.a_fc_1 = nn.Linear(self.size, 64)
-        self.a_fc_2 = nn.Linear(64, u_dim)
+        self.size = 32
+        self.a_fc_1 = nn.Linear(self.size, 16)
+        self.a_fc_2 = nn.Linear(16, u_dim)
         if dueling:
-            self.v_fc_1 = nn.Linear(self.size, 64)
-            self.v_fc_2 = nn.Linear(64, 1)
+            self.v_fc_1 = nn.Linear(self.size, 16)
+            self.v_fc_2 = nn.Linear(16, 1)
 
     def forward(self, state):
         x = F.relu(self.conv_1(state))

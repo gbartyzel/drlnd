@@ -10,7 +10,7 @@ class History(object):
         self._state = np.zeros((history_length, img_size[0], img_size[1]))
 
     def add(self, img):
-        proc_img = self._image_preprocessing(img)
+        proc_img = self._image_preprocessing(img * 255)
         self._state = np.roll(self._state, 1)
         self._state[0] = proc_img
 
@@ -19,10 +19,8 @@ class History(object):
             self._history_length, self._img_size[0], self._img_size[1]))
 
     def _image_preprocessing(self, img):
-        grayscaled = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-        resized = cv2.resize(grayscaled, self._img_size)
-
-        return resized
+        grayscaled = np.dot(img[...,:3], [0.299, 0.587, 0.114])
+        return cv2.resize(grayscaled, self._img_size)
 
     @property
     def state(self):

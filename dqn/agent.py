@@ -5,14 +5,15 @@ import torch
 import torch.optim as optim
 import torch.nn.functional as F
 
+from time import time
 from utils.memory import ReplayMemory
-from dqn.model import QNetworkDense
+from dqn.model import QNetworkDense, QNetworkConv
 
 
 class Agent(object):
     def __init__(self, o_dim, u_dim, lrate, tau, gamma, n_step_annealing,
                  eps_min, update_freq, buffer_size, batch_size, double_q, 
-                 dueling, model_path):
+                 dueling, model_path, visual):
         """
         Initialize DQN agent.
         
@@ -48,10 +49,15 @@ class Agent(object):
         self._steps = 0
 
         self._checkpoint_path = os.path.join(model_path, "checkpoint.pth")
-
-        self._dqn_main = QNetworkDense(o_dim, u_dim, dueling).to(self._device)
-        self._dqn_target = QNetworkDense(
-            o_dim, u_dim, dueling).to(self._device)
+        
+        if visual:
+            self._dqn_main = QNetworkConv(o_dim, u_dim, dueling).to(self._device)
+            self._dqn_target = QNetworkConv(
+                o_dim, u_dim, dueling).to(self._device)
+        else:
+            self._dqn_main = QNetworkDense(o_dim, u_dim, dueling).to(self._device)
+            self._dqn_target = QNetworkDense(
+                o_dim, u_dim, dueling).to(self._device)
         self.load_model()
         self._dqn_target.load_state_dict(self._dqn_target.state_dict())
         self._memory = ReplayMemory(buffer_size, batch_size)
@@ -94,8 +100,6 @@ class Agent(object):
             done (bool): environment terminal flag.
         """
         self._memory.add(state, action, reward, next_state, done)
-
-
         if self._steps % self._update_freq == 0:
             self._steps = 0
             if self._memory.size >= self._batch_size:
@@ -109,20 +113,19 @@ class Agent(object):
         next_state_batch = train_batch['obs2'].to(self._device)
         done_batch = train_batch['d'].float().to(self._device)
 
-        with torch.no_grad():
-            if self._double_q:
-                next_actions = torch.argmax(
-                    self._dqn_main(next_state_batch), dim=1).view(-1, 1)
-                q_target_next = torch.gather(self._dqn_target(
-                    next_state_batch), 1, next_actions)
-            else:
-                q_target_next = torch.max(self._dqn_target(
-                    next_state_batch), dim=1)[0].view(-1, 1)
+        if self._double_q:
+            next_actions = self._dqn_main(
+                next_state_batch).detach().argmax(1).view(-1, 1)
+            q_target_next = self._dqn_target(
+                next_state_batch).detach().gather(1, next_actions)
+        else:
+            q_target_next = self._dqn_target(
+                next_state_batch).max(1)[0].view(-1, 1)
 
-        q_values = torch.gather(
-            self._dqn_main(state_batch), 1, action_batch)
+        q_values = self._dqn_main(state_batch).gather(1, action_batch)
         q_target = (reward_batch + (1.0 - done_batch) * self._gamma
                     * q_target_next)
+        
         loss = F.smooth_l1_loss(q_values.squeeze(), q_target.squeeze())
         self._optim.zero_grad()
         loss.backward()
