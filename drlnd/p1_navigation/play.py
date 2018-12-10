@@ -6,20 +6,19 @@ from tqdm import tqdm
 
 
 class Play(object):
-    def __init__(self, env, dqn, nb_episodes=1):
+    def __init__(self, env, dqn):
         self._dqn = dqn
         self._env = env
         self._brain_name = self._env.brain_names[0]
 
-        self._nb_episodes = nb_episodes
         self._writer = SummaryWriter(os.path.split(self._dqn.checkpoint_path)[0])
 
     def eval(self):
         return self._run_env(False)
 
-    def learn(self, stable_episodes=100, mean_score=13.0):
+    def learn(self, nb_episodes=1000, stable_episodes=100, mean_score=13.0):
         scores = list()
-        for ep in tqdm(range(self._nb_episodes)):
+        for ep in tqdm(range(nb_episodes)):
             score = self._run_env(True)
             scores.append(score)
             self._ep_summary(score)
@@ -27,6 +26,8 @@ class Play(object):
                 self._dqn.save_model()
             if len(scores) > stable_episodes:
                 if np.mean(scores[ep - stable_episodes:]) > mean_score:
+                    print("Mean score: {} achieved after {} episodes".format(
+                        np.mean(scores[ep-stable_episodes:]), ep))
                     break
 
     def _run_env(self, train):
@@ -53,8 +54,8 @@ class Play(object):
 
         for name, param in self._dqn.parameters:
             self._writer.add_histogram(
-                "main" + name, param.clone().cpu().data.numpy(), self._dqn.step)
+                "main/" + name, param.clone().cpu().data.numpy(), self._dqn.step)
 
         for name, param in self._dqn.target_parameters:
             self._writer.add_histogram(
-                "target" + name, param.clone().cpu().data.numpy(), self._dqn.step)
+                "target/" + name, param.clone().cpu().data.numpy(), self._dqn.step)

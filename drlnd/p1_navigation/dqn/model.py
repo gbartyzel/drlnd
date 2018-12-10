@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from drlnd.utils.noisy_linear import FactorizedNoisyLinear
+from drlnd.utils.noisy_linear import FactorizedNoisyLinear, IndependentNoisyLinear
 
 
 class QNetworkDense(nn.Module):
@@ -14,21 +14,21 @@ class QNetworkDense(nn.Module):
             layer = FactorizedNoisyLinear
 
         self._dueling = dueling
-        self.fc_1 = nn.Linear(o_dim, 128)
-        self.a_fc_1 = layer(128, 64)
-        self.a_fc_2 = layer(64, u_dim)
+        self.feature_fc = nn.Linear(o_dim, 128)
+        self.advantage_fc_1 = layer(128, 128)
+        self.advantage_fc_2 = layer(128, u_dim)
         if dueling:
-            self.v_fc_1 = layer(128, 64)
-            self.v_fc_2 = layer(64, 1)
+            self.value_fc_1 = layer(128, 128)
+            self.value_fc_2 = layer(128, 1)
 
     def forward(self, state):
-        x = F.relu(self.fc_1(state))
-        a_x = F.relu(self.a_fc_1(x))
-        a_x = self.a_fc_2(a_x)
+        x = F.elu(self.feature_fc(state))
+        a_x = F.relu(self.advantage_fc_1(x))
+        a_x = self.advantage_fc_2(a_x)
         if self._dueling:
-            v_x = F.relu(self.v_fc_1(x))
-            v_x = self.v_fc_2(v_x)
-            return v_x + (a_x - torch.mean(a_x, dim=1).view(-1, 1))
+            v_x = F.relu(self.value_fc_1(x))
+            v_x = self.value_fc_2(v_x)
+            return v_x + a_x - a_x.mean(dim=1, keepdim=True)
         return a_x
 
 

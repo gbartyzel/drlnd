@@ -11,33 +11,19 @@ from drlnd.p1_navigation.dqn.model import QNetworkDense, QNetworkConv
 
 class Agent(object):
     def __init__(self, state_dim, action_dim, lrate, gamma, n_step_annealing, epsilon_min,
-                 update_frequency, target_update_frequency, buffer_size, batch_size, use_double_q,
-                 use_dueling, use_noisynet, logdir):
-        """
-        Initialize DQN agent.
-        
-        Params
-        ======
-            lrate (float): learning rate,
-            tau (float): parameter for soft update,
-            gamma (float): discount factor for reward,
-            n_step_annealing (int): define max steps for exploration
-            eps_min (float): minimum value of the epsilon,
-            update_freq (int): update frequency for the agent,
-            buffer_size (int): replay memory capacity,
-            batch_size (int): size of the minibatch,
-            double_q (bool): flag that enable double dqn,
-            dueling (bool): flag that enable dueling dqn,
-            model_path (string): path for saved model.
-        """
+                 update_frequency, target_update_frequency, buffer_size, batch_size,
+                 warm_up_steps, use_double_q, use_dueling, use_noisynet, logdir):
         use_cuda = torch.cuda.is_available()
         self._device = torch.device("cuda" if use_cuda else "cpu")
         self._action_dim = action_dim
         self._state_dim = state_dim
         self._gamma = gamma
+
         self._update_freq = update_frequency
-        self._target_update_frequency = target_update_frequency
+        self._tau = 1.0 / target_update_frequency
         self._batch_size = batch_size
+        self._warm_up_steps = warm_up_steps
+
         self._use_double_q = use_double_q
         self._use_noisynet = use_noisynet
 
@@ -48,32 +34,29 @@ class Agent(object):
 
         self.checkpoint_path = os.path.join(logdir, "checkpoint.pth")
 
-        self._dqn_main = QNetworkDense(state_dim, action_dim, use_dueling).to(self._device)
-        self._dqn_target = QNetworkDense(state_dim, action_dim, use_dueling).to(self._device)
+        self._dqn = QNetworkDense(
+            state_dim, action_dim, use_dueling, use_noisynet).to(self._device)
+        self._dqn_target = QNetworkDense(
+            state_dim, action_dim, use_dueling, use_noisynet).to(self._device)
+
         self.load_model()
-        self._dqn_target.load_state_dict(self._dqn_target.state_dict())
+        self._dqn_target.load_state_dict(self._dqn.state_dict())
+        self._dqn_target.eval()
+
         self._memory = ReplayMemory(buffer_size, batch_size)
 
-        self._optim = optim.Adam(self._dqn_main.parameters(), lrate)
+        self._optim = optim.Adam(self._dqn.parameters(), lr=lrate)
 
     def act(self, state, train=False):
-        """
-        Returns actions for given state from environment
-        
-        Params
-        ======
-            state (array_like): current state
-            train (bool): train flag for exploration
-        """
         self._epsilon -= self._epsilon_decay
         self._epsilon = max(self._epsilon, self._epsilon_min)
         self.step += 1
 
         state = torch.from_numpy(state).float().unsqueeze(0).to(self._device)
-        self._dqn_main.eval()
+        self._dqn.eval()
         with torch.no_grad():
-            action_values = self._dqn_main(state)
-        self._dqn_main.train()
+            action_values = self._dqn(state)
+        self._dqn.train()
 
         if np.random.rand() > self._epsilon or not train or self._use_noisynet:
             return np.argmax(action_values.cpu().data.numpy())
@@ -81,19 +64,9 @@ class Agent(object):
             return np.random.randint(self._action_dim)
 
     def observe(self, state, action, reward, next_state, done):
-        """
-        Perform learning procedure.
-        
-        Params:
-            state (array_like): current state,
-            action (int): performed action,
-            reward (float): reward received from environemnt,
-            next_state (array_like): next state,
-            done (bool): environment terminal flag.
-        """
         self._memory.add(state, action, reward, next_state, done)
         if self.step % self._update_freq == 0:
-            if self._memory.size >= self._batch_size:
+            if self._memory.size >= self._warm_up_steps:
                 self._learn()
 
     def _learn(self):
@@ -105,47 +78,37 @@ class Agent(object):
         done_batch = train_batch['d'].float().to(self._device)
 
         if self._use_double_q:
-            next_actions = self._dqn_main(next_state_batch).detach().argmax(1).view(-1, 1)
-            q_target_next = self._dqn_target(next_state_batch).detach().gather(1, next_actions)
+            next_actions = self._dqn(next_state_batch).detach().argmax(1).view(-1, 1)
+            target_next_q = self._dqn_target(next_state_batch).detach().gather(1, next_actions)
         else:
-            q_target_next = self._dqn_target(next_state_batch).detach().max(1)[0].view(-1, 1)
+            target_next_q = self._dqn_target(next_state_batch).detach().max(1)[0].view(-1, 1)
 
-        q_values = self._dqn_main(state_batch).gather(1, action_batch)
-        q_target = reward_batch + (1.0 - done_batch) * self._gamma * q_target_next
+        expected_q = self._dqn(state_batch).gather(1, action_batch)
+        target_q = reward_batch + (1.0 - done_batch) * self._gamma * target_next_q
 
-        loss = F.smooth_l1_loss(q_values.squeeze(), q_target.squeeze())
+        loss = F.smooth_l1_loss(expected_q, target_q)
         self._optim.zero_grad()
         loss.backward()
-        for param in self._dqn_main.parameters():
-            param.grad.data.clamp_(-1.0, 1.0)
+        for param in self._dqn.parameters():
+            param.grad.data.clamp_(-1, 1)
         self._optim.step()
 
-        if self.step % self._target_update_frequency == 0:
-            self._update_target()
-
-    def _update_target(self):
-        for t_param, param in zip(self._dqn_target.parameters(), self._dqn_main.parameters()):
-            t_param.data.copy_(param.data)
+        for target_param, param in zip(self._dqn_target.parameters(), self._dqn.parameters()):
+            target_param.data.copy_(self._tau * param.data + (1.0 - self._tau) * target_param.data)
 
     def save_model(self):
-        """
-        Save model in path.
-        """
-        torch.save(self._dqn_main.state_dict(), self.checkpoint_path)
+        torch.save(self._dqn.state_dict(), self.checkpoint_path)
 
     def load_model(self):
-        """
-        Load model if exists.
-        """
         if not os.path.isdir(os.path.split(self.checkpoint_path)[0]):
             os.makedirs(os.path.split(self.checkpoint_path)[0])
         if os.path.exists(self.checkpoint_path):
-            self._dqn_main.load_state_dict(torch.load(self.checkpoint_path))
+            self._dqn.load_state_dict(torch.load(self.checkpoint_path))
             print("Model found and loaded!")
 
     @property
     def parameters(self):
-        return self._dqn_main.named_parameters()
+        return self._dqn.named_parameters()
 
     @property
     def target_parameters(self):

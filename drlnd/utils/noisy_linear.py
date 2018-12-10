@@ -7,8 +7,7 @@ from torch.autograd import Variable
 
 class FactorizedNoisyLinear(nn.Linear):
     def __init__(self, in_features, out_features, bias=True):
-        super(FactorizedNoisyLinear, self).__init__(in_features, out_features,
-                                                    bias)
+        super(FactorizedNoisyLinear, self).__init__(in_features, out_features, bias)
         mu_init = 1.0 / np.sqrt(self.in_features)
         sigma_init = 0.5 / np.sqrt(self.in_features)
 
@@ -37,8 +36,7 @@ class FactorizedNoisyLinear(nn.Linear):
 
 class IndependentNoisyLinear(nn.Linear):
     def __init__(self, in_features, out_features, bias=True):
-        super(IndependentNoisyLinear, self).__init__(in_features, out_features,
-                                                     bias)
+        super(IndependentNoisyLinear, self).__init__(in_features, out_features, bias)
         mu_init = np.sqrt(3.0 / self.in_features)
         sigma_init = 0.017
 
