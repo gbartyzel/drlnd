@@ -1,6 +1,23 @@
 import torch
 import numpy as np
-from collections import deque
+
+
+class RingBuffer(object):
+    def __init__(self, capacity, dim):
+        self._size = 0
+        self._capacity = capacity
+        self._buffer = np.zeros((capacity, dim), dtype=np.float32)
+
+    def push(self, input):
+        if self._size < self._capacity:
+            self._size += 1
+            self._buffer[self._size - 1, :] = input
+        elif self._size == self._capacity:
+            self._buffer = np.roll(self._buffer, shift=-1, axis=0)
+            self._buffer[self._capacity - 1, :] = input
+
+    def get_batch(self, batch_indexs):
+        return np.take(self._buffer, batch_indexs, axis=0)
 
 
 class ReplayMemory(object):
@@ -9,7 +26,8 @@ class ReplayMemory(object):
     experience in fixed size buffer and sample transition of batch size for
     learning purpose.
     """
-    def __init__(self, capacity, batch_size):
+
+    def __init__(self, capacity, batch_size, state_dim, action_dim):
         """
         Initialize replay memory
         
@@ -18,16 +36,16 @@ class ReplayMemory(object):
             capacity (int): set size of the buffer,
             batch_size (int): set size of the minibatch
         """
-        self.capacity = capacity
+        self._capacity = capacity
         self._batch_size = batch_size
 
-        self._observation1_buffer = deque(maxlen=capacity)
-        self._action_buffer = deque(maxlen=capacity)
-        self._reward_buffer = deque(maxlen=capacity)
-        self._observation2_buffer = deque(maxlen=capacity)
-        self._terminal_buffer = deque(maxlen=capacity)
+        self._observation1_buffer = RingBuffer(capacity, state_dim)
+        self._action_buffer = RingBuffer(capacity, action_dim)
+        self._reward_buffer = RingBuffer(capacity, 1)
+        self._observation2_buffer = RingBuffer(capacity, state_dim)
+        self._terminal_buffer = RingBuffer(capacity, 1)
 
-    def add(self, state, action, reward, next_state, done):
+    def push(self, state, action, reward, next_state, done):
         """
         Add transition to replay buffer
         
@@ -39,11 +57,11 @@ class ReplayMemory(object):
             next_state (array_like): observation in step t+1,
             done (bool): terminal signal from environment,
         """
-        self._add_to_buffer(self._observation1_buffer, state)
-        self._add_to_buffer(self._action_buffer, action)
-        self._add_to_buffer(self._reward_buffer, reward)
-        self._add_to_buffer(self._observation2_buffer, next_state)
-        self._add_to_buffer(self._terminal_buffer, float(done))
+        self._observation1_buffer.push(state)
+        self._action_buffer.push(action)
+        self._reward_buffer.push(reward)
+        self._observation2_buffer.push(next_state)
+        self._terminal_buffer.push(done)
 
     def sample(self, device):
         """
@@ -51,26 +69,14 @@ class ReplayMemory(object):
         """
         idxs = np.random.randint((self.size - 1), size=self._batch_size)
         batch = dict()
-        batch['obs1'] = self._prepare_batch(self._observation1_buffer, idxs).float().to(device)
-        batch['u'] = self._prepare_batch(self._action_buffer, idxs).to(device)
-        batch['r'] = self._prepare_batch(self._reward_buffer, idxs).float().to(device)
-        batch['obs2'] = self._prepare_batch(self._observation2_buffer, idxs).float().to(device)
-        batch['d'] = self._prepare_batch(self._terminal_buffer, idxs).float().to(device)
+        batch['obs1'] = torch.from_numpy(self._observation1_buffer.get_batch(idxs)).to(device)
+        batch['u'] = torch.from_numpy(self._action_buffer.get_batch(idxs)).to(device)
+        batch['r'] = torch.from_numpy(self._reward_buffer.get_batch(idxs)).to(device)
+        batch['obs2'] = torch.from_numpy(self._observation2_buffer.get_batch(idxs)).to(device)
+        batch['d'] = torch.from_numpy(self._terminal_buffer.get_batch(idxs)).to(device)
 
         return batch
 
     @property
     def size(self):
-        return len(self._observation1_buffer)
-
-    def _add_to_buffer(self, buffer, value):
-        if self.size >= self.capacity:
-            buffer.popleft()
-        if len(np.shape(value)) > 1:
-            value = np.expand_dims(value, axis=0)
-        buffer.append(value)
-
-    @staticmethod
-    def _prepare_batch(input_buffer, idxs):
-        input_buffer = np.vstack(np.take(input_buffer, idxs, axis=0))
-        return torch.from_numpy(input_buffer)
+        return self._observation1_buffer._size

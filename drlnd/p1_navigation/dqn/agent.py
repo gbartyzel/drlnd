@@ -6,7 +6,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 
 from drlnd.utils.memory import ReplayMemory
-from drlnd.p1_navigation.dqn.model import QNetworkDense, QNetworkConv
+from drlnd.p1_navigation.dqn.model import QNetworkDense
 
 
 class Agent(object):
@@ -43,7 +43,7 @@ class Agent(object):
         self._dqn_target.load_state_dict(self._dqn.state_dict())
         self._dqn_target.eval()
 
-        self._memory = ReplayMemory(buffer_size, batch_size)
+        self._memory = ReplayMemory(buffer_size, batch_size, state_dim, action_dim)
 
         self._optim = optim.Adam(self._dqn.parameters(), lr=lrate)
 
@@ -64,18 +64,18 @@ class Agent(object):
             return np.random.randint(self._action_dim)
 
     def observe(self, state, action, reward, next_state, done):
-        self._memory.add(state, action, reward, next_state, done)
+        self._memory.push(state, action, reward, next_state, done)
         if self.step % self._update_freq == 0:
             if self._memory.size >= self._warm_up_steps:
                 self._learn()
 
     def _learn(self):
-        train_batch = self._memory.sample()
-        state_batch = train_batch['obs1'].to(self._device)
-        action_batch = train_batch['u'].to(self._device)
-        reward_batch = train_batch['r'].to(self._device)
-        next_state_batch = train_batch['obs2'].to(self._device)
-        done_batch = train_batch['d'].float().to(self._device)
+        train_batch = self._memory.sample(self._device)
+        state_batch = train_batch['obs1']
+        action_batch = train_batch['u'].long()
+        reward_batch = train_batch['r']
+        next_state_batch = train_batch['obs2']
+        done_batch = train_batch['d']
 
         if self._use_double_q:
             next_actions = self._dqn(next_state_batch).detach().argmax(1).view(-1, 1)

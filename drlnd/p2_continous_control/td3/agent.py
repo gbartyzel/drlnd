@@ -35,7 +35,7 @@ class Agent(object):
         self._actor_optim = torch.optim.Adam(self._actor_network.parameters(), actor_lr)
         self._critic_optim = torch.optim.Adam(self._critic_network.parameters(), critic_lr)
 
-        self._memory = ReplayMemory(buffer_size, batch_size)
+        self._memory = ReplayMemory(buffer_size, batch_size, state_dim, action_dim)
 
         self._noise = GaussianNoise(action_dim, sigma=0.1)
         self._target_noise = GaussianNoise(action_dim, sigma=0.2)
@@ -56,7 +56,7 @@ class Agent(object):
         return action.cpu().data.numpy()
 
     def observe(self, state, action, reward, next_state, done):
-        self._memory.add(state, action, reward, next_state, done)
+        self._memory.push(state, action, reward, next_state, done)
         if self._memory.size >= self._warm_up_steps:
             self.step += 1
             self._learn()
@@ -71,10 +71,10 @@ class Agent(object):
 
         noise = self._target_noise().clamp(-0.5, 0.5).to(self._device)
         next_action = self._target_actor_network(next_state_batch) + noise
-        next_action = next_action.clamp(-1.0, 1.0).detach()
+        next_action = next_action.clamp(-1.0, 1.0)
 
         target_next_q1, target_next_q2 = self._target_critic_network(next_state_batch, next_action)
-        target_next_q = torch.min(target_next_q1.detach(), target_next_q2.detach()).view(-1, 1)
+        target_next_q = torch.min(target_next_q1, target_next_q2).view(-1, 1).detach()
 
         target_q = reward_batch + (1.0 - done_batch) * self._gamma * target_next_q
         expected_q1, expected_q2 = self._critic_network(state_batch, action_batch)
@@ -86,7 +86,8 @@ class Agent(object):
         del loss_q
 
         if self.step % self._update_frequency:
-            loss = -self._critic_network(state_batch, self._actor_network(state_batch))[0].mean()
+            actions = self._actor_network(state_batch)
+            loss = -self._critic_network.evaluate_q1(state_batch, actions)[0].mean()
             self._actor_optim.zero_grad()
             loss.backward()
             self._actor_optim.step()
@@ -114,8 +115,8 @@ class Agent(object):
 
     @property
     def parameters(self):
-        return list(self._actor_network.named_parameters()) + list(
-            self._critic_network.named_parameters())
+        return list(self._actor_network.named_parameters()) + \
+               list(self._critic_network.named_parameters())
 
     @property
     def target_parameters(self):
