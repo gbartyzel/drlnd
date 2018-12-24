@@ -21,11 +21,11 @@ class ReplayMemory(object):
         self.capacity = capacity
         self._batch_size = batch_size
 
-        self._observation1_buffer = deque()
-        self._action_buffer = deque()
-        self._reward_buffer = deque()
-        self._observation2_buffer = deque()
-        self._terminal_buffer = deque()
+        self._observation1_buffer = deque(maxlen=capacity)
+        self._action_buffer = deque(maxlen=capacity)
+        self._reward_buffer = deque(maxlen=capacity)
+        self._observation2_buffer = deque(maxlen=capacity)
+        self._terminal_buffer = deque(maxlen=capacity)
 
     def add(self, state, action, reward, next_state, done):
         """
@@ -45,17 +45,17 @@ class ReplayMemory(object):
         self._add_to_buffer(self._observation2_buffer, next_state)
         self._add_to_buffer(self._terminal_buffer, float(done))
 
-    def sample(self):
+    def sample(self, device):
         """
         Return minibatch from transition stored in replay buffer.
         """
         idxs = np.random.randint((self.size - 1), size=self._batch_size)
         batch = dict()
-        batch['obs1'] = self._prepare_batch(self._observation1_buffer, idxs).float()
-        batch['u'] = self._prepare_batch(self._action_buffer, idxs).long()
-        batch['r'] = self._prepare_batch(self._reward_buffer, idxs).float()
-        batch['obs2'] = self._prepare_batch(self._observation2_buffer, idxs).float()
-        batch['d'] = self._prepare_batch(self._terminal_buffer, idxs).float()
+        batch['obs1'] = self._prepare_batch(self._observation1_buffer, idxs).float().to(device)
+        batch['u'] = self._prepare_batch(self._action_buffer, idxs).to(device)
+        batch['r'] = self._prepare_batch(self._reward_buffer, idxs).float().to(device)
+        batch['obs2'] = self._prepare_batch(self._observation2_buffer, idxs).float().to(device)
+        batch['d'] = self._prepare_batch(self._terminal_buffer, idxs).float().to(device)
 
         return batch
 
