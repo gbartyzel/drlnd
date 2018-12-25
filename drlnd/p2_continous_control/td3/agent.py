@@ -26,15 +26,17 @@ class Agent(object):
 
         self._actor_network = Actor(action_dim, state_dim).to(self._device)
         self._target_actor_network = Actor(action_dim, state_dim).to(self._device)
-        self._target_actor_network.load_state_dict(self._actor_network.state_dict())
-        self._target_actor_network.eval()
         self._actor_optim = torch.optim.Adam(self._actor_network.parameters(), actor_lr)
 
         self._critic_network = Critic(action_dim, state_dim).to(self._device)
         self._target_critic_network = Critic(action_dim, state_dim).to(self._device)
-        self._target_critic_network.load_state_dict(self._critic_network.state_dict())
-        self._target_critic_network.eval()
         self._critic_optim = torch.optim.Adam(self._critic_network.parameters(), critic_lr)
+
+        self.load_model()
+        self._target_actor_network.load_state_dict(self._actor_network.state_dict())
+        self._target_critic_network.load_state_dict(self._critic_network.state_dict())
+        self._target_actor_network.eval()
+        self._target_critic_network.eval()
 
         self._memory = ReplayMemory(buffer_size, batch_size, state_dim, action_dim)
 
