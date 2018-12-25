@@ -9,7 +9,7 @@ def parser_setup():
     parser.add_argument('--train', action='store_true')
     parser.add_argument('--logdir', type=str, default='output')
     parser.add_argument('--nb_episodes', type=int, default=1000)
-    parser.add_argument('--update_frequency', type=int, default=4)
+    parser.add_argument('--update_frequency', type=int, default=2)
     parser.add_argument('--tau', type=int, default=0.005)
     parser.add_argument('--buffer_size', type=int, default=100000)
     parser.add_argument('--batch_size', type=int, default=100)

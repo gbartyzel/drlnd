@@ -13,6 +13,7 @@ class Agent(object):
                  batch_size, update_frequency, warm_up_steps, logdir):
         use_cuda = torch.cuda.is_available()
         self._device = torch.device("cuda" if use_cuda else "cpu")
+        self.step = 0
 
         self._action_dim = action_dim
         self._state_dim = state_dim
@@ -21,28 +22,24 @@ class Agent(object):
         self._tau = tau
         self._update_frequency = update_frequency
         self._warm_up_steps = warm_up_steps
+        self.checkpoint_path = os.path.join(logdir, "checkpoint.pth")
 
         self._actor_network = Actor(action_dim, state_dim).to(self._device)
-        self._critic_network = Critic(action_dim, state_dim).to(self._device)
         self._target_actor_network = Actor(action_dim, state_dim).to(self._device)
-        self._target_critic_network = Critic(action_dim, state_dim).to(self._device)
-
         self._target_actor_network.load_state_dict(self._actor_network.state_dict())
-        self._target_critic_network.load_state_dict(self._critic_network.state_dict())
         self._target_actor_network.eval()
-        self._target_critic_network.eval()
-
         self._actor_optim = torch.optim.Adam(self._actor_network.parameters(), actor_lr)
+
+        self._critic_network = Critic(action_dim, state_dim).to(self._device)
+        self._target_critic_network = Critic(action_dim, state_dim).to(self._device)
+        self._target_critic_network.load_state_dict(self._critic_network.state_dict())
+        self._target_critic_network.eval()
         self._critic_optim = torch.optim.Adam(self._critic_network.parameters(), critic_lr)
 
         self._memory = ReplayMemory(buffer_size, batch_size, state_dim, action_dim)
 
         self._noise = GaussianNoise(action_dim, sigma=0.1)
         self._target_noise = GaussianNoise(action_dim, sigma=0.2)
-
-        self.step = 0
-
-        self.checkpoint_path = os.path.join(logdir, "checkpoint.pth")
 
     def act(self, state, train=False):
         state = torch.from_numpy(state).float().unsqueeze(0).to(self._device)
@@ -87,7 +84,7 @@ class Agent(object):
 
         if self.step % self._update_frequency:
             actions = self._actor_network(state_batch)
-            loss = -self._critic_network.evaluate_q1(state_batch, actions)[0].mean()
+            loss = -self._critic_network.evaluate_q1(state_batch, actions).mean()
             self._actor_optim.zero_grad()
             loss.backward()
             self._actor_optim.step()
@@ -110,7 +107,9 @@ class Agent(object):
         if not os.path.isdir(os.path.split(self.checkpoint_path)[0]):
             os.makedirs(os.path.split(self.checkpoint_path)[0])
         if os.path.exists(self.checkpoint_path):
-            self._c.load_state_dict(torch.load(self.checkpoint_path))
+            models = torch.load(self.checkpoint_path)
+            self._actor_network.load_state_dict(models['actor'])
+            self._critic_network.load_state_dict(models['critic'])
             print("Model found and loaded!")
 
     @property
