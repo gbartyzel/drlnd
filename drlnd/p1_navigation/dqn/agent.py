@@ -10,14 +10,15 @@ from drlnd.p1_navigation.dqn.model import QNetworkDense
 
 
 class Agent(object):
-    def __init__(self, state_dim, action_dim, lrate, gamma, n_step_annealing, epsilon_min,
+    def __init__(self, state_dim, action_dim, lrate, gamma, n_step, n_step_annealing, epsilon_min,
                  update_frequency, target_update_frequency, buffer_size, batch_size,
                  warm_up_steps, use_double_q, use_dueling, use_noisynet, logdir):
         use_cuda = torch.cuda.is_available()
         self._device = torch.device("cuda" if use_cuda else "cpu")
         self._action_dim = action_dim
         self._state_dim = state_dim
-        self._gamma = gamma
+        self.gamma = gamma
+        self.n_step = n_step
 
         self._update_freq = update_frequency
         self._tau = 1.0 / target_update_frequency
@@ -84,7 +85,7 @@ class Agent(object):
             target_next_q = self._dqn_target(next_state_batch).detach().max(1)[0].view(-1, 1)
 
         expected_q = self._dqn(state_batch).gather(1, action_batch)
-        target_q = reward_batch + (1.0 - done_batch) * self._gamma * target_next_q
+        target_q = reward_batch + (1.0 - done_batch) * self.gamma ** self.n_step * target_next_q
 
         loss = F.smooth_l1_loss(expected_q, target_q)
         self._optim.zero_grad()
