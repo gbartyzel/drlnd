@@ -8,40 +8,17 @@ from drlnd.utils.exploration_noise import GaussianNoise
 from drlnd.p2_continous_control.td3.model import Actor, Critic
 
 
-class Agent(object):
-    def __init__(self, action_dim, state_dim, actor_lr, critic_lr, gamma, tau, buffer_size,
-                 batch_size, update_frequency, warm_up_steps, logdir):
+class SimpleAgent(object):
+    def __init__(self, action_dim, state_dim):
         use_cuda = torch.cuda.is_available()
         self._device = torch.device("cuda" if use_cuda else "cpu")
-        self.step = 0
 
-        self._action_dim = action_dim
-        self._state_dim = state_dim
-
-        self._gamma = gamma
-        self._tau = tau
-        self._update_frequency = update_frequency
-        self._warm_up_steps = warm_up_steps
-        self.checkpoint_path = os.path.join(logdir, "checkpoint.pth")
-
-        self._actor_network = Actor(action_dim, state_dim).to(self._device)
-        self._target_actor_network = Actor(action_dim, state_dim).to(self._device)
-        self._actor_optim = torch.optim.Adam(self._actor_network.parameters(), actor_lr)
-
-        self._critic_network = Critic(action_dim, state_dim).to(self._device)
-        self._target_critic_network = Critic(action_dim, state_dim).to(self._device)
-        self._critic_optim = torch.optim.Adam(self._critic_network.parameters(), critic_lr)
-
-        self.load_model()
-        self._target_actor_network.load_state_dict(self._actor_network.state_dict())
-        self._target_critic_network.load_state_dict(self._critic_network.state_dict())
-        self._target_actor_network.eval()
-        self._target_critic_network.eval()
-
-        self._memory = ReplayMemory(buffer_size, batch_size, state_dim, action_dim)
+        self._actor_network = Actor(action_dim, state_dim).to(self._device).share_memory()
+        self._critic_network = Critic(action_dim, state_dim).to(self._device).share_memory()
+        self._actor_network.train()
+        self._critic_network.train()
 
         self._noise = GaussianNoise(action_dim, sigma=0.1)
-        self._target_noise = GaussianNoise(action_dim, sigma=0.2)
 
     def act(self, state, train=False):
         state = torch.from_numpy(state).float().unsqueeze(0).to(self._device)
@@ -53,6 +30,44 @@ class Agent(object):
         if train:
             action = torch.clamp(action + self._noise().to(self._device), -1.0, 1.0)
         return action.cpu().data.numpy()
+
+    def load_shared(self, state_dicts):
+        self._actor_network.load_state_dict(state_dicts['actor'])
+        self._critic_network.load_state_dict(state_dicts['critic'])
+
+
+class TD3(SimpleAgent):
+    def __init__(self, action_dim, state_dim, actor_lr, critic_lr, gamma, tau, n_step, buffer_size,
+                 batch_size, update_frequency, warm_up_steps, logdir):
+        super(TD3, self).__init__(action_dim, state_dim)
+        
+        self.step = 0
+        self.gamma = gamma
+        self.n_step = n_step
+
+        self._action_dim = action_dim
+        self._state_dim = state_dim
+
+        self._tau = tau
+        self._update_frequency = update_frequency
+        self._warm_up_steps = warm_up_steps
+        self.checkpoint_path = os.path.join(logdir, "checkpoint.pth")
+
+        self._target_actor_network = Actor(action_dim, state_dim).to(self._device)
+        self._actor_optim = torch.optim.Adam(self._actor_network.parameters(), actor_lr)
+
+        self._target_critic_network = Critic(action_dim, state_dim).to(self._device)
+        self._critic_optim = torch.optim.Adam(self._critic_network.parameters(), critic_lr)
+
+        self.load_model()
+        self._target_actor_network.load_state_dict(self._actor_network.state_dict())
+        self._target_critic_network.load_state_dict(self._critic_network.state_dict())
+        self._target_actor_network.eval()
+        self._target_critic_network.eval()
+
+        self._memory = ReplayMemory(buffer_size, batch_size, state_dim, action_dim)
+
+        self._target_noise = GaussianNoise(action_dim, sigma=0.2)
 
     def observe(self, state, action, reward, next_state, done):
         self._memory.push(state, action, reward, next_state, done)
@@ -75,7 +90,7 @@ class Agent(object):
         target_next_q1, target_next_q2 = self._target_critic_network(next_state_batch, next_action)
         target_next_q = torch.min(target_next_q1, target_next_q2).view(-1, 1).detach()
 
-        target_q = reward_batch + (1.0 - done_batch) * self._gamma * target_next_q
+        target_q = reward_batch + (1.0 - done_batch) * self.gamma ** self.n_step * target_next_q
         expected_q1, expected_q2 = self._critic_network(state_batch, action_batch)
 
         loss_q = F.mse_loss(expected_q1, target_q) + F.mse_loss(expected_q2, target_q)
@@ -123,3 +138,41 @@ class Agent(object):
     def target_parameters(self):
         return list(self._target_actor_network.named_parameters()) + \
                list(self._target_critic_network.named_parameters())
+
+    @property
+    def state_dicts(self):
+        return {
+            'actor': self._actor_network.state_dict(),
+            'critic': self._critic_network.state_dict()
+        }
+
+
+class DistributedTD3(TD3):
+    def __init__(self, nb_agents, worker_update_frequency, **kwargs):
+        super(DistributedTD3, self).__init__(**kwargs)
+        self._nb_agents = nb_agents
+        self._worker_update_frequency = worker_update_frequency
+
+        self._workers = nb_agents * [SimpleAgent(kwargs['action_dim'], kwargs['state_dim'])]
+        for i in range(nb_agents):
+            self._workers[i].load_shared(self.state_dicts)
+
+    def act(self, state, train=False):
+        actions = [self._workers[i].act(state[i], train) for i in range(self._nb_agents)]
+
+        return actions
+
+    def observe(self, state, action, reward, next_state, done):
+        for i in range(self._nb_agents):
+            self._memory.push(state[i], action[i], reward[i], next_state[i], done[i])
+
+        if self._memory.size >= self._warm_up_steps:
+            self.step += 1
+            self._learn()
+            self._update_worker()
+
+    def _update_worker(self):
+        if self.step % self._worker_update_frequency:
+            for i in range(self._nb_agents):
+                self._workers[i].load_shared(self.state_dicts)
+
