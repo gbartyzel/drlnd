@@ -1,6 +1,6 @@
 import argparse
 from drlnd.utils.play import Play
-from drlnd.p2_continous_control.td3.agent import TD3, DistributedTD3
+from drlnd.p2_continuous_control.td3.agent import TD3, DistributedTD3
 from unityagents import UnityEnvironment
 
 

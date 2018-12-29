@@ -5,7 +5,7 @@ import torch.nn.functional as F
 
 from drlnd.utils.memory import ReplayMemory
 from drlnd.utils.exploration_noise import GaussianNoise
-from drlnd.p2_continous_control.td3.model import Actor, Critic
+from drlnd.p2_continuous_control.td3.model import Actor, Critic
 
 
 class SimpleAgent(object):
