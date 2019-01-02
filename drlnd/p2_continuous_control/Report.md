@@ -3,10 +3,11 @@
 ### Learning algorithm
 
 TD3 was chosen to solve Reacher environment. The algorithm is a modification of DDPG. More 
-information could be found in paper [].Proposed implementation is using techniques:
+information could be found in paper [1].Proposed implementation is using techniques:
 1. Simple replay memory (non-prioritized)
 2. Distributed learning
 3. N-step learning
+4. Delayed learning (warm up steps to fill replay memory)
 
 ### Model
 
@@ -43,6 +44,23 @@ first 100 episodes. Stable point of the training was reached at episode number 1
 
 ### Comments
 
-Earlier experience with DDPG forced me to find better solution like used in this project TD3 
-algorithm. 
+Earlier experiences with DDPG forced me to find better solution like used in this project TD3 
+algorithm. Before solving environment with 20 agents, the variant with one was solved. 
+In this case, convergence was achieved after around 200 episodes. Results was good 
+comparing to DDPG (instability, long learning process etc.). Converting single agent algorithm 
+to multiagent was quite easy. In fact this implementation is a mix of TD3 and D4PG[2]. Core of the
+agent is taken from TD3, implementation of distributed training was taken from D4PG.
 
+### Future ideas
+
+Current solution was solved environment after 113 episodes. Probably it could be improved after
+implementing following methods:
+* Prioritized Replay Memory [3]
+* Distributed Prioritized Experience Replay [4]
+
+### Bibliography
+
+1. [Fujimoto, Scott; van Hoof, Herke; Meger, David "Addressing Function Approximation Error in Actor-Critic Methods"](https://arxiv.org/pdf/1802.09477.pdf)
+2. [Barth-Maron, Gabriel; Hoffman, Matthew W. et. al "Distributed Distributional Deterministic Policy Gradients"](https://arxiv.org/pdf/1804.08617.pdf)
+3. [Schaul, Tom; Quan, John; Antonoglou, Ioannis; Silver, David "Prioritized Experience Replay"](https://arxiv.org/pdf/1511.05952.pdf)
+4. [Horgan, Dan; Quan, John; Budden, David; et. al "Distributed Prioritized Experience Replay"](https://arxiv.org/pdf/1803.00933.pdf)
