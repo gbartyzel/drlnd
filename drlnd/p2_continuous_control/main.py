@@ -7,7 +7,7 @@ from unityagents import UnityEnvironment
 def parser_setup():
     parser = argparse.ArgumentParser()
     parser.add_argument('--train', action='store_true')
-    parser.add_argument('--logdir', type=str, default='output')
+    parser.add_argument('--logdir', type=str, default='output/distributed_agents')
     parser.add_argument('--nb_episodes', type=int, default=500)
     parser.add_argument('--use_distributed', action='store_true')
     parser.add_argument('--nb_agents', type=int, default=20)

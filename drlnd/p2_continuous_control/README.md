@@ -39,7 +39,7 @@ For perform learning procedure of single agent just run following command in ter
 
 Distributed learning could be run by:
 
-```python main.py --train --use_distributed --logdir="output/distributed"```
+```python main.py --train --use_distributed --logdir="output/distributed_agents"```
 
 More options could be found after running:
 
@@ -47,6 +47,8 @@ More options could be found after running:
 
 To evaluate learned policy run for example following command:
 
-```python main.py --train --use_distributed --logdir="output/distributed"```
+```python main.py --train --use_distributed --logdir="output/distributed_agents"```
 
 ### Report
+
+Description of used architecture and learning process can be found in [report](Report.md)

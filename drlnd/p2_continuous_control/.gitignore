@@ -1,5 +1,7 @@
 env/*
 !env/.gitkeep
-output/*
-!output/checkpoint.pth
+output/distributed_agents/*
+!output/distributed_agents/checkpoint.pth
+output/single_agent/*
+!output/single_agent/checkpoint.pth
 unity-environment.log
