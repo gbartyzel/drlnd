@@ -93,9 +93,10 @@ class TD3(SimpleAgent):
         target_q = reward_batch + (1.0 - done_batch) * self.gamma ** self.n_step * target_next_q
         expected_q1, expected_q2 = self._critic_network(state_batch, action_batch)
 
-        loss_q = F.mse_loss(expected_q1, target_q) + F.mse_loss(expected_q2, target_q)
+        loss_q = F.smooth_l1_loss(expected_q1, target_q) + F.smooth_l1_loss(expected_q2, target_q)
         self._critic_optim.zero_grad()
         loss_q.backward()
+        torch.nn.utils.clip_grad_norm_(self._critic_network.parameters(), 10.0)
         self._critic_optim.step()
         del loss_q
 
@@ -104,6 +105,7 @@ class TD3(SimpleAgent):
             loss = -self._critic_network.evaluate_q1(state_batch, actions).mean()
             self._actor_optim.zero_grad()
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(self._actor_network.parameters(), 10.0)
             self._actor_optim.step()
             del loss
 

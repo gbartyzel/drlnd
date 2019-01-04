@@ -3,7 +3,7 @@
 ### Learning algorithm
 
 TD3 was chosen to solve Reacher environment. The algorithm is a modification of DDPG. More 
-information could be found in paper [1].Proposed implementation is using techniques:
+information could be found in paper [1]. Proposed implementation is using techniques:
 1. Simple replay memory (non-prioritized)
 2. Distributed learning
 3. N-step learning
@@ -13,12 +13,12 @@ information could be found in paper [1].Proposed implementation is using techniq
 
 Following structure was used for agent:
 * Actor:
-  * Layer 1: Linear ReLu (33, 512)
-  * Layer 2: Linear ReLu (512, 512)
+  * Layer 1: Linear ELU (33, 512)
+  * Layer 2: Linear ELU (512, 512)
   * Policy layer: Linear Tanh (512, 4)
 * Critic:
-  * Layer 1: Linear ReLu (33 + 4, 512)
-  * Layer 2: Linear Relu (512, 512)
+  * Layer 1: Linear ELU (33 + 4, 512)
+  * Layer 2: Linear ElU (512, 512)
   * Value layer: Linear (512, 1)
   
 Critic contains two identical networks which are not mutual. It's a form of double Q-learning.
@@ -37,14 +37,14 @@ Critic contains two identical networks which are not mutual. It's a form of doub
 ### Performance
 
 Agents was learning for 500 episodes and achieved average score 30.0 over 100 episodes after 
-first 100 episodes. Stable point of the training was reached at episode number 13. The mean score
- from that moment to the end is 38.26. 
+first 100 episodes. Stable point of the training was reached at episode number 21. The mean score
+ from that moment to the end is 39.11. 
 
 ![Result](misc/result.png)
 
 Agent was learning for 1000 episodes and achieved average score over 30.0 over 100 episodes after
- 244 episodes. Stable point of training was reached at around episode number 330. The mean score 
- from that moment to end is 36.62.
+ 214 episodes. Stable point of training was reached at around episode number 282. The mean score 
+ from that moment to end is 37.77.
  
 ![Result](misc/single_agent_result.png)
 
