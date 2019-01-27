@@ -8,12 +8,12 @@ class GaussianNoise(object):
         self._mean = mean
         self._sigma = sigma
 
-    def __call__(self):
+    def __call__(self, *args):
         return torch.normal(mean=self._mean, std=torch.ones(self._dim) * self._sigma)
 
 
 class AdaptiveGaussianNoise(GaussianNoise):
-    def __init__(self, dim, mean, sigma, sigma_min, n_step_annealing):
+    def __init__(self, dim, mean=0.0, sigma=1.0, sigma_min=0.0, n_step_annealing=1e6):
         super(AdaptiveGaussianNoise, self).__init__(dim, mean, sigma)
 
         self._sigma_min = sigma_min
@@ -23,8 +23,9 @@ class AdaptiveGaussianNoise(GaussianNoise):
         self._sigma -= self._sigma_decay_factor
         self._sigma = max(self._sigma, self._sigma_min)
 
-    def __call__(self):
-        self._reduce_sigma()
+    def __call__(self, decay):
+        if decay:
+            self._reduce_sigma()
         return torch.normal(mean=self._mean, std=torch.ones(self._dim) * self._sigma)
 
 
@@ -59,12 +60,13 @@ class OUNoise(AdaptiveGaussianNoise):
         """
         self._state = torch.ones(self._dim) * self._mean
 
-    def __call__(self):
+    def __call__(self, decay):
         """
         Calculate noise value on the step t
         :return: np.ndarray, noise
         """
-        self._reduce_sigma()
+        if decay:
+            self._reduce_sigma()
         x = (self._state + self._theta * (self._mean - self._state) * self._dt
              + np.sqrt(self._dt) * self._sigma * torch.normal(mean=torch.zeros(self._dim)))
         self._state = x

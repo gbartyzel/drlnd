@@ -6,11 +6,13 @@ from tqdm import tqdm
 
 
 class Play(object):
-    def __init__(self, env, agent, distributed):
+    def __init__(self, env, agent, distributed=False, multi_agent=False, save_interval=100):
         self._agent = agent
         self._env = env
         self._distributed = distributed
+        self._multi_agent = multi_agent
         self._brain_name = self._env.brain_names[0]
+        self._save_interval = save_interval
 
         self._writer = SummaryWriter(os.path.split(self._agent.checkpoint_path)[0])
 
@@ -21,15 +23,20 @@ class Play(object):
 
     def learn(self, nb_episodes=1000):
         scores = list()
-        for _ in tqdm(range(nb_episodes)):
-            if self._distributed:
+        for i in tqdm(range(nb_episodes)):
+            if self._distributed or self._multi_agent:
                 score = self._run_distributed_env(True)
             else:
                 score = self._run_env(True)
             scores.append(score)
             self._ep_summary(score)
-            if score >= max(scores) or not scores:
-                self._agent.save_model()
+            if len(scores) > self._save_interval:
+                if (np.mean(scores[-self._save_interval:])
+                        > np.mean(scores[-self._save_interval - 1: -1])):
+                    self._agent.save_model()
+
+        path = os.path.split(self._agent.checkpoint_path)[0]
+        np.save(os.path.join(path, "scores.npy"), np.asarray(scores))
 
     def _run_distributed_env(self, train):
         episode_state = list()
@@ -68,7 +75,8 @@ class Play(object):
             state = next_state
             if any(done):
                 break
-
+        if self._multi_agent:
+            return np.sum(episode_reward, axis=0)
         return np.sum(np.mean(np.vstack(episode_reward), axis=1))
 
     def _run_env(self, train):
@@ -105,7 +113,11 @@ class Play(object):
         return np.sum(episode_reward)
 
     def _ep_summary(self, score):
-        self._writer.add_scalar("train/reward", score, self._agent.step)
+        if self._multi_agent:
+            for i, reward in enumerate(score):
+                self._writer.add_scalar("train/reward_{}".format(i), reward, self._agent.step)
+        else:
+            self._writer.add_scalar("train/reward", score, self._agent.step)
 
         for name, param in self._agent.parameters:
             self._writer.add_histogram(

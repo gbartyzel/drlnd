@@ -1,0 +1,5 @@
+env/*
+!env/.gitkeep
+output/*
+!output/checkpoint.pth
+unity-environment.log

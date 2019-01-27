@@ -17,7 +17,10 @@ class RingBuffer(object):
             self._buffer[self._capacity - 1, :] = input
 
     def get_batch(self, batch_indexs):
-        return np.take(self._buffer, batch_indexs, axis=0)
+        batch = np.take(self._buffer, batch_indexs, axis=0)
+        if not batch.shape[1] > 1:
+            return batch.squeeze(axis=1)
+        return batch
 
 
 class ReplayMemory(object):
@@ -37,7 +40,7 @@ class ReplayMemory(object):
             batch_size (int): set size of the minibatch
         """
         self._capacity = capacity
-        self._batch_size = batch_size
+        self.batch_size = batch_size
 
         self._observation1_buffer = RingBuffer(capacity, state_dim)
         self._action_buffer = RingBuffer(capacity, action_dim)
@@ -63,11 +66,12 @@ class ReplayMemory(object):
         self._observation2_buffer.push(next_state)
         self._terminal_buffer.push(done)
 
-    def sample(self, device):
+    def sample(self, device, idxs=None):
         """
         Return minibatch from transition stored in replay buffer.
         """
-        idxs = np.random.randint((self.size - 1), size=self._batch_size)
+        if idxs is not None:
+            idxs = np.random.randint((self.size - 1), size=self.batch_size)
         batch = dict()
         batch['obs1'] = torch.from_numpy(self._observation1_buffer.get_batch(idxs)).to(device)
         batch['u'] = torch.from_numpy(self._action_buffer.get_batch(idxs)).to(device)
