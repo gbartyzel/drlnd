@@ -30,10 +30,10 @@ However, actions are introduced to critic on layer 2.
 
 * Critic learning rate (critic_lr): 0.001
 * Actor learning rate (actor_lr): 0.0001
-* Target and actor networks soft update factor (tau): 0.005
+* Target and actor networks soft update factor (tau): 0.0075
 * Replay memory capacity (buffer_size): 1000000
 * Batch size (batch_size): 256
-* Warm up steps (warm_up_steps): 100000
+* Warm up steps (warm_up_steps): 5000
 * N-step return (n_step): 1
 * Exploration noise sigma decay (exploration_decay): 100000
 * Exploration noise scaling factor (exploration_factor): 0.5
