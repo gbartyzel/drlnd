@@ -35,6 +35,7 @@ However, actions are introduced to critic on layer 2.
 * Batch size (batch_size): 256
 * Warm up steps (warm_up_steps): 5000
 * N-step return (n_step): 1
+* Discount factor (gamma): 0.98
 * Exploration noise sigma decay (exploration_decay): 100000
 * Exploration noise scaling factor (exploration_factor): 0.5
 
