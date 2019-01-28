@@ -9,13 +9,14 @@ from drlnd.p3_collab_compet.maddpg.model import Actor, Critic
 
 class SimpleDDPG(object):
     def __init__(self, action_dim, state_dim, actor_lr, critic_lr, index, nb_agents,
-                 buffer_size, batch_size, logdir):
+                 buffer_size, batch_size, exploration_factor, exploration_decay, logdir):
         use_cuda = torch.cuda.is_available()
         self._device = torch.device("cuda" if use_cuda else "cpu")
 
         self._action_dim = action_dim
         self._state_dim = state_dim
         self._index = index
+        self._exploration_factor = exploration_factor
 
         self.checkpoint_path = os.path.join(logdir, "checkpoint.pth".format(index))
 
@@ -38,8 +39,7 @@ class SimpleDDPG(object):
 
         self.memory = ReplayMemory(buffer_size, batch_size, state_dim, action_dim)
 
-        # self.noise = OUNoise(action_dim, n_step_annealing=1e5)
-        self.noise = AdaptiveGaussianNoise(action_dim, 0.0, 1.0, 0.05, 1e5)
+        self.noise = AdaptiveGaussianNoise(action_dim, 0.0, 1.0, 0.1, exploration_decay)
 
     def act(self, state, train=False, warm_up=False):
         state = torch.from_numpy(state).float().unsqueeze(0).to(self._device)
@@ -49,7 +49,8 @@ class SimpleDDPG(object):
         self.actor_network.train()
 
         if train:
-            action = torch.clamp(action + 0.5 * self.noise(warm_up).to(self._device), -1.0, 1.0)
+            noise = self.noise(warm_up).to(self._device)
+            action = torch.clamp(action + self._exploration_factor * noise, -1.0, 1.0)
         return action.cpu().data.numpy()
 
     def target_act(self, state):
