@@ -70,7 +70,7 @@ class ReplayMemory(object):
         """
         Return minibatch from transition stored in replay buffer.
         """
-        if idxs is not None:
+        if not idxs:
             idxs = np.random.randint((self.size - 1), size=self.batch_size)
         batch = dict()
         batch['obs1'] = torch.from_numpy(self._observation1_buffer.get_batch(idxs)).to(device)
